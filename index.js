@@ -21,7 +21,6 @@ const countries = {
   "GB": { name: "United Kingdom", emoji: "🇬🇧" },
   "CA": { name: "Canada", emoji: "🇨🇦" },
   "AU": { name: "Australia", emoji: "🇦🇺" },
-  // Add more countries as needed
   "KE": { name: "Kenya", emoji: "🇰🇪" },
   "NG": { name: "Nigeria", emoji: "🇳🇬" },
   "ZA": { name: "South Africa", emoji: "🇿🇦" },
@@ -38,7 +37,6 @@ const countries = {
 };
 
 function getCountryFromIP(ip) {
-  // For local testing
   if (ip === '::1' || ip === '127.0.0.1') {
     return { 
       code: 'KE', 
@@ -70,7 +68,7 @@ function getCountryFromIP(ip) {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(requestIp.mw());
 
-// Fake user count (starts at 600)
+// Fake user count
 let fakeUserCount = 600;
 setInterval(() => {
   fakeUserCount += Math.floor(Math.random() * 11) - 5;
