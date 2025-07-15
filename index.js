@@ -1,63 +1,82 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
-// Serve files from the 'public' folder
-app.use(express.static('public'));
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve Socket.io client
+app.get('/socket.io/socket.io.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'node_modules/socket.io/client-dist/socket.io.js'));
+});
 
 // Queue for waiting users
 let waitingUser = null;
 
-// Helper: Generate anonymous ID
+// Generate random username
 function genUsername() {
   return 'User' + Math.floor(1000 + Math.random() * 9000);
 }
 
-// When a new user connects
 io.on('connection', (socket) => {
   socket.username = genUsername();
   socket.emit('your-name', socket.username);
-
   console.log(`🟢 ${socket.username} connected (${socket.id})`);
 
   if (waitingUser) {
     const partner = waitingUser;
     socket.partner = partner;
     partner.partner = socket;
-
     waitingUser = null;
 
     socket.emit('paired', { with: partner.username });
     partner.emit('paired', { with: socket.username });
-
     console.log(`🔗 Paired ${socket.username} <--> ${partner.username}`);
   } else {
     waitingUser = socket;
     socket.emit('waiting');
-    console.log(`⏳ ${socket.username} is waiting for a stranger...`);
+    console.log(`⏳ ${socket.username} is waiting...`);
   }
 
-  // TEXT CHAT
+  // Text chat
   socket.on('chat message', (msg) => {
     if (socket.partner) {
       socket.partner.emit('chat message', `${socket.username}: ${msg}`);
     }
   });
 
-  // "Find New Stranger" Button
+  // Typing indicators
+  socket.on('typing', () => {
+    if (socket.partner) {
+      socket.partner.emit('typing', socket.username);
+    }
+  });
+
+  socket.on('stop-typing', () => {
+    if (socket.partner) {
+      socket.partner.emit('stop-typing');
+    }
+  });
+
+  // Find new stranger
   socket.on('find new', () => {
     console.log(`${socket.username} is finding a new stranger.`);
 
     if (socket.partner) {
       socket.partner.emit('stranger disconnected');
       socket.partner.partner = null;
+      socket.partner = null;
     }
-
-    socket.partner = null;
 
     if (waitingUser === null) {
       waitingUser = socket;
@@ -71,12 +90,11 @@ io.on('connection', (socket) => {
 
       socket.emit('paired', { with: partner.username });
       partner.emit('paired', { with: socket.username });
-
       console.log(`🔁 Repaired ${socket.username} <--> ${partner.username}`);
     }
   });
 
-  // WebRTC Signaling
+  // WebRTC signaling
   socket.on('webrtc-offer', (offer) => {
     if (socket.partner) {
       socket.partner.emit('webrtc-offer', offer);
@@ -95,7 +113,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // When a user disconnects
+  // Disconnect
   socket.on('disconnect', () => {
     console.log(`🔴 ${socket.username} disconnected`);
 
@@ -111,6 +129,7 @@ io.on('connection', (socket) => {
 });
 
 // Start server
-server.listen(3000, () => {
-  console.log('🚀 Server is running on http://localhost:3000');
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

@@ -1,81 +1,265 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Stranger Chat</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omiglo Video Chat</title>
+  <!-- Preconnect to CDNs for faster loading -->
+  <link rel="preconnect" href="https://cdn.tailwindcss.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  
+  <!-- Tailwind CSS with custom config -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              500: '#6366f1',
+              600: '#4f46e5',
+            },
+          },
+          animation: {
+            'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'typing': 'typing 1.8s ease-in-out infinite',
+            'fade-in': 'fadeIn 0.3s ease-in-out',
+          },
+          keyframes: {
+            typing: {
+              '0%, 100%': { opacity: 0.5 },
+              '50%': { opacity: 1 },
+            },
+            fadeIn: {
+              '0%': { opacity: 0 },
+              '100%': { opacity: 1 },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f7f7f7;
-      text-align: center;
-      padding: 20px;
+    /* Custom styles */
+    #messages::-webkit-scrollbar {
+      width: 6px;
     }
-    #status {
-      font-size: 18px;
-      margin-bottom: 10px;
+    #messages::-webkit-scrollbar-track {
+      background: #e5e7eb;
+      border-radius: 3px;
     }
-    #messages {
-      list-style: none;
-      padding: 0;
-      max-height: 200px;
-      overflow-y: auto;
-      border: 1px solid #ccc;
-      margin-bottom: 10px;
+    #messages::-webkit-scrollbar-thumb {
+      background: #9ca3af;
+      border-radius: 3px;
     }
-    #messages li {
-      background: #e3e3e3;
-      margin: 5px;
+    .dark #messages::-webkit-scrollbar-track {
+      background: #374151;
+    }
+    .dark #messages::-webkit-scrollbar-thumb {
+      background: #6b7280;
+    }
+    .video-container {
+      position: relative;
+      overflow: hidden;
+      border-radius: 0.5rem;
+    }
+    .video-watermark {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 12px;
+      pointer-events: none;
+    }
+    .video-controls {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
       padding: 8px;
-      border-radius: 5px;
-      text-align: left;
-    }
-    #form {
-      margin-bottom: 20px;
-    }
-    input {
-      padding: 10px;
-      width: 70%;
-      font-size: 16px;
-    }
-    button {
-      padding: 10px 15px;
-      font-size: 16px;
-      margin-left: 10px;
-    }
-    video {
-      width: 300px;
-      height: 200px;
-      background: black;
-      margin: 10px;
-    }
-    #video-area {
       display: none;
-      margin: 20px 0;
+      justify-content: flex-end;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%);
+    }
+    .video-container:hover .video-controls {
+      display: flex;
+    }
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 20px;
+      margin-left: 8px;
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .typing-dot {
+      width: 6px;
+      height: 6px;
+      background-color: #9ca3af;
+      border-radius: 50%;
     }
   </style>
 </head>
-<body>
-  <h1>Stranger Video Chat 👥</h1>
-  <div id="status">Connecting...</div>
-  
-  <div id="video-area">
-    <video id="localVideo" autoplay muted></video>
-    <video id="remoteVideo" autoplay></video>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-200">
+  <div class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-white dark:bg-gray-800 shadow-sm">
+      <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+        <h1 class="text-xl font-bold text-primary-600 dark:text-primary-500 flex items-center gap-2">
+          <i class="fas fa-video"></i>
+          <span>Omiglo.com</span>
+        </h1>
+        <div class="flex items-center gap-4">
+          <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+            <i id="theme-icon" class="fas fa-sun"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 container mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6 max-w-7xl">
+      <!-- Video Area (Top on mobile, left on desktop) -->
+      <div class="w-full lg:w-2/3 order-1 lg:order-1">
+        <div id="video-area" class="hidden bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Stranger Video (Top on mobile) -->
+            <div class="video-container bg-black aspect-video">
+              <video id="remoteVideo" autoplay class="w-full h-full object-cover"></video>
+              <div class="video-watermark">omiglo.com</div>
+              <div class="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
+                <span id="stranger-name">Stranger</span>
+              </div>
+            </div>
+            
+            <!-- Local Video -->
+            <div class="video-container bg-black aspect-video">
+              <video id="localVideo" autoplay muted class="w-full h-full object-cover"></video>
+              <div class="video-watermark">omiglo.com</div>
+              <div class="video-controls">
+                <button id="flip-camera" class="p-2 text-white hover:text-primary-500 transition-colors" title="Flip Camera">
+                  <i class="fas fa-camera-rotate"></i>
+                </button>
+                <button id="mute-camera" class="p-2 text-white hover:text-primary-500 transition-colors" title="Mute Video">
+                  <i class="fas fa-video-slash"></i>
+                </button>
+                <button id="mute-mic" class="p-2 text-white hover:text-primary-500 transition-colors" title="Mute Mic">
+                  <i class="fas fa-microphone-slash"></i>
+                </button>
+              </div>
+              <div class="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
+                You
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status Area -->
+        <div id="status" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mt-4 text-center">
+          <div class="flex justify-center items-center gap-2">
+            <span id="status-text">Connecting...</span>
+            <div id="typing-indicator" class="typing-indicator hidden">
+              <span id="typing-name"></span>
+              <div class="typing-dot animation-delay-0"></div>
+              <div class="typing-dot animation-delay-150"></div>
+              <div class="typing-dot animation-delay-300"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Area -->
+      <div class="w-full lg:w-1/3 order-2 lg:order-2 flex flex-col">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md flex-1 flex flex-col">
+          <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="font-semibold">Chat Messages</h2>
+          </div>
+          <ul id="messages" class="flex-1 overflow-y-auto p-4 space-y-2"></ul>
+          <form id="form" class="p-4 border-t border-gray-200 dark:border-gray-700">
+            <div class="flex gap-2">
+              <input id="input" autocomplete="off" placeholder="Type a message..." 
+                class="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-800">
+              <button type="submit" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Find New Stranger Button -->
+        <button id="new" class="mt-4 w-full px-6 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+          <i class="fas fa-rotate"></i>
+          <span>Find New Stranger</span>
+        </button>
+      </div>
+    </main>
   </div>
 
-  <ul id="messages"></ul>
-
-  <form id="form">
-    <input id="input" autocomplete="off" placeholder="Type a message..." />
-    <button>Send</button>
-  </form>
-
-  <button id="new">🔄 Find New Stranger</button>
-
+  <!-- Socket.io and custom JS -->
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
+    // Theme Management
+    const themeToggle = document.getElementById('theme-toggle');
+    const themeIcon = document.getElementById('theme-icon');
+    
+    // Initialize theme
+    const savedTheme = localStorage.getItem('theme') || 'system';
+    setTheme(savedTheme);
 
-    const status = document.getElementById('status');
+    themeToggle.addEventListener('click', () => {
+      const currentTheme = localStorage.getItem('theme') || 'system';
+      let newTheme;
+      
+      if (currentTheme === 'dark') newTheme = 'light';
+      else if (currentTheme === 'light') newTheme = 'system';
+      else newTheme = 'dark';
+      
+      setTheme(newTheme);
+      localStorage.setItem('theme', newTheme);
+    });
+
+    function setTheme(theme) {
+      if (theme === 'system') {
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', systemPrefersDark);
+        updateThemeIcon(systemPrefersDark ? 'dark' : 'light');
+      } else {
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+        updateThemeIcon(theme);
+      }
+    }
+
+    function updateThemeIcon(theme) {
+      if (theme === 'dark') {
+        themeIcon.classList.replace('fa-sun', 'fa-moon');
+      } else {
+        themeIcon.classList.replace('fa-moon', 'fa-sun');
+      }
+    }
+
+    // Watch for system theme changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      if (localStorage.getItem('theme') === 'system') {
+        document.documentElement.classList.toggle('dark', e.matches);
+        updateThemeIcon(e.matches ? 'dark' : 'light');
+      }
+    });
+
+    // Chat and Video Functionality
+    const socket = io({
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 20000
+    });
+
+    // DOM Elements
+    const statusText = document.getElementById('status-text');
+    const strangerName = document.getElementById('stranger-name');
     const messages = document.getElementById('messages');
     const form = document.getElementById('form');
     const input = document.getElementById('input');
@@ -83,81 +267,185 @@
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
     const newBtn = document.getElementById('new');
+    const typingIndicator = document.getElementById('typing-indicator');
+    const typingName = document.getElementById('typing-name');
+    const flipCameraBtn = document.getElementById('flip-camera');
+    const muteCameraBtn = document.getElementById('mute-camera');
+    const muteMicBtn = document.getElementById('mute-mic');
 
+    // WebRTC Variables
     let pc;
+    let localStream;
+    let isCameraFlipped = false;
+    let isVideoMuted = false;
+    let isMicMuted = false;
     const pcConfig = {
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' }
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' }
       ]
     };
 
+    // Typing detection
+    let typingTimeout;
+    input.addEventListener('input', () => {
+      socket.emit('typing');
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        socket.emit('stop-typing');
+      }, 2000);
+    });
+
+    // Form submission
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       if (input.value.trim()) {
-        addMessage('You: ' + input.value);
+        addMessage('You: ' + input.value, 'self');
         socket.emit('chat message', input.value);
         input.value = '';
+        socket.emit('stop-typing');
       }
     });
 
+    // Find new stranger
     newBtn.onclick = () => {
       socket.emit('find new');
       messages.innerHTML = '';
-      status.textContent = 'Looking for a new stranger...';
-      videoArea.style.display = 'none';
+      statusText.textContent = 'Looking for a new stranger...';
+      videoArea.classList.add('hidden');
       if (pc) {
         pc.close();
         pc = null;
       }
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
     };
 
-    function addMessage(msg) {
+    // Add message to chat
+    function addMessage(msg, type = 'other') {
       const li = document.createElement('li');
+      li.className = `px-3 py-2 rounded-lg ${type === 'self' ? 'bg-primary-100 dark:bg-primary-900 ml-8' : 'bg-gray-100 dark:bg-gray-700 mr-8'}`;
       li.textContent = msg;
       messages.appendChild(li);
       messages.scrollTop = messages.scrollHeight;
     }
 
+    // Video controls
+    flipCameraBtn.addEventListener('click', toggleCameraFlip);
+    muteCameraBtn.addEventListener('click', toggleVideoMute);
+    muteMicBtn.addEventListener('click', toggleMicMute);
+
+    function toggleCameraFlip() {
+      if (!localStream) return;
+      
+      isCameraFlipped = !isCameraFlipped;
+      const videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack) {
+        const settings = videoTrack.getSettings();
+        if (settings.facingMode) {
+          const newFacingMode = settings.facingMode === 'user' ? 'environment' : 'user';
+          restartCamera(newFacingMode);
+        } else {
+          // For browsers that don't support facingMode
+          localVideo.style.transform = isCameraFlipped ? 'scaleX(-1)' : 'scaleX(1)';
+        }
+      }
+    }
+
+    function toggleVideoMute() {
+      if (!localStream) return;
+      
+      isVideoMuted = !isVideoMuted;
+      localStream.getVideoTracks()[0].enabled = !isVideoMuted;
+      muteCameraBtn.innerHTML = isVideoMuted ? '<i class="fas fa-video"></i>' : '<i class="fas fa-video-slash"></i>';
+      muteCameraBtn.title = isVideoMuted ? 'Unmute Video' : 'Mute Video';
+    }
+
+    function toggleMicMute() {
+      if (!localStream) return;
+      
+      isMicMuted = !isMicMuted;
+      localStream.getAudioTracks()[0].enabled = !isMicMuted;
+      muteMicBtn.innerHTML = isMicMuted ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
+      muteMicBtn.title = isMicMuted ? 'Unmute Mic' : 'Mute Mic';
+    }
+
+    async function restartCamera(facingMode) {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+      
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facingMode },
+          audio: true
+        });
+        
+        localVideo.srcObject = localStream;
+        if (pc) {
+          const videoTrack = localStream.getVideoTracks()[0];
+          const audioTrack = localStream.getAudioTracks()[0];
+          
+          const senders = pc.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+          
+          if (videoSender) videoSender.replaceTrack(videoTrack);
+          if (audioSender) audioSender.replaceTrack(audioTrack);
+        }
+      } catch (err) {
+        console.error('Error restarting camera:', err);
+      }
+    }
+
+    // Socket.io Events
     socket.on('your-name', (name) => {
-      status.textContent = `You are ${name}`;
+      statusText.textContent = `You are ${name}`;
     });
 
     socket.on('waiting', () => {
-      status.textContent = 'Waiting for a stranger...';
+      statusText.textContent = 'Waiting for a stranger...';
     });
 
     socket.on('paired', (data) => {
-      status.textContent = `You are now chatting with ${data.with}`;
-      addMessage(`--- Connected to ${data.with} ---`);
+      statusText.textContent = `Connected to ${data.with}`;
+      strangerName.textContent = data.with;
+      addMessage(`--- Connected to ${data.with} ---`, 'system');
+      videoArea.classList.remove('hidden');
       startWebRTC();
     });
 
     socket.on('chat message', (msg) => {
-      addMessage(msg);
+      addMessage(msg, 'other');
+    });
+
+    socket.on('typing', (username) => {
+      typingName.textContent = username;
+      typingIndicator.classList.remove('hidden');
+    });
+
+    socket.on('stop-typing', () => {
+      typingIndicator.classList.add('hidden');
     });
 
     socket.on('stranger disconnected', () => {
-      status.textContent = 'Stranger disconnected 😢';
-      addMessage('--- Stranger disconnected ---');
-      videoArea.style.display = 'none';
+      statusText.textContent = 'Stranger disconnected 😢';
+      addMessage('--- Stranger disconnected ---', 'system');
+      videoArea.classList.add('hidden');
       if (pc) {
         pc.close();
         pc = null;
       }
     });
 
-    // ==== WebRTC Signaling ====
-
+    // WebRTC Functions
     function startWebRTC() {
       pc = new RTCPeerConnection(pcConfig);
-      videoArea.style.display = 'block';
-
-      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then((stream) => {
-          localVideo.srcObject = stream;
-          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-        }).catch(err => console.error('Media error:', err));
-
+      
+      // Set up event listeners
       pc.onicecandidate = (e) => {
         if (e.candidate) {
           socket.emit('webrtc-ice-candidate', e.candidate);
@@ -177,26 +465,68 @@
           console.error('Offer error:', err);
         }
       };
+
+      // Get user media and add tracks
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then((stream) => {
+          localStream = stream;
+          localVideo.srcObject = stream;
+          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+        })
+        .catch(err => {
+          console.error('Media error:', err);
+          statusText.textContent = 'Could not access camera/microphone';
+        });
     }
 
+    // WebRTC Signaling Events
     socket.on('webrtc-offer', async (offer) => {
       if (!pc) startWebRTC();
-      await pc.setRemoteDescription(offer);
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit('webrtc-answer', answer);
+      try {
+        await pc.setRemoteDescription(offer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc-answer', answer);
+      } catch (err) {
+        console.error('Error handling offer:', err);
+      }
     });
 
     socket.on('webrtc-answer', async (answer) => {
-      await pc.setRemoteDescription(answer);
+      try {
+        await pc.setRemoteDescription(answer);
+      } catch (err) {
+        console.error('Error handling answer:', err);
+      }
     });
 
     socket.on('webrtc-ice-candidate', async (candidate) => {
       try {
-        await pc.addIceCandidate(candidate);
+        if (pc && candidate) {
+          await pc.addIceCandidate(candidate);
+        }
       } catch (err) {
-        console.error('ICE Error:', err);
+        console.error('Error adding ICE candidate:', err);
       }
+    });
+
+    // Preload important assets
+    window.addEventListener('load', () => {
+      // Preload icons
+      const icons = [
+        'fa-video',
+        'fa-video-slash',
+        'fa-microphone',
+        'fa-microphone-slash',
+        'fa-camera-rotate',
+        'fa-paper-plane',
+        'fa-rotate',
+        'fa-sun',
+        'fa-moon'
+      ].forEach(icon => {
+        const img = new Image();
+        img.src = `https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/solid/${icon.split('-')[1]}.svg`;
+      });
     });
   </script>
 </body>
