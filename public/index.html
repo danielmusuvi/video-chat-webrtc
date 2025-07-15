@@ -83,6 +83,9 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.7; }
     }
+    .mirror-video {
+      transform: scaleX(-1);
+    }
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
@@ -128,12 +131,12 @@
         
         <!-- Local Video -->
         <div class="video-container bg-black rounded-lg aspect-video">
-          <video id="localVideo" autoplay muted class="w-full h-full object-cover"></video>
+          <video id="localVideo" autoplay muted class="w-full h-full object-cover mirror-video"></video>
           <div id="local-country" class="country-flag"></div>
           <div class="video-watermark">omiglo.com</div>
           <div class="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">You</div>
           <div class="absolute top-2 right-2 flex gap-2">
-            <button id="flip-camera" class="p-2 bg-black/50 text-white rounded-full hidden" title="Front Camera">
+            <button id="flip-camera" class="p-2 bg-black/50 text-white rounded-full hidden" title="Flip Camera">
               <i class="fas fa-camera-rotate"></i>
             </button>
             <button id="mute-camera" class="p-2 bg-black/50 text-white rounded-full" title="Mute Video">
@@ -227,7 +230,7 @@
     let partnerData = {};
     let pc;
     let localStream;
-    let isCameraFlipped = false;
+    let isFrontCamera = true;
     let isVideoMuted = false;
     let isMicMuted = false;
     let connectionStartTime = null;
@@ -327,19 +330,51 @@
     muteCameraBtn.addEventListener('click', toggleVideoMute);
     muteMicBtn.addEventListener('click', toggleMicMute);
 
-    function toggleCameraFlip() {
+    async function toggleCameraFlip() {
       if (!localStream) return;
       
-      isCameraFlipped = !isCameraFlipped;
+      isFrontCamera = !isFrontCamera;
       const videoTrack = localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        const settings = videoTrack.getSettings();
-        if (settings.facingMode) {
-          const newFacingMode = settings.facingMode === 'user' ? 'environment' : 'user';
-          restartCamera(newFacingMode);
+      
+      try {
+        // Stop current tracks
+        localStream.getTracks().forEach(track => track.stop());
+        
+        // Get new stream with opposite facing mode
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: isFrontCamera ? 'user' : 'environment' },
+          audio: true
+        });
+        
+        // Apply mirror effect only for front camera
+        if (isFrontCamera) {
+          localVideo.classList.add('mirror-video');
         } else {
-          localVideo.style.transform = isCameraFlipped ? 'scaleX(-1)' : 'scaleX(1)';
+          localVideo.classList.remove('mirror-video');
         }
+        
+        localVideo.srcObject = localStream;
+        
+        // Replace tracks in peer connection if exists
+        if (pc) {
+          const videoTrack = localStream.getVideoTracks()[0];
+          const audioTrack = localStream.getAudioTracks()[0];
+          
+          const senders = pc.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+          
+          if (videoSender) videoSender.replaceTrack(videoTrack);
+          if (audioSender) audioSender.replaceTrack(audioTrack);
+        }
+        
+        // Update button icon
+        flipCameraBtn.innerHTML = isFrontCamera ? 
+          '<i class="fas fa-camera-rotate"></i>' : 
+          '<i class="fas fa-camera"></i>';
+          
+      } catch (err) {
+        console.error('Error flipping camera:', err);
       }
     }
 
@@ -359,34 +394,6 @@
       muteMicBtn.innerHTML = isMicMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
     }
 
-    async function restartCamera(facingMode) {
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-      }
-      
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facingMode },
-          audio: true
-        });
-        
-        localVideo.srcObject = localStream;
-        if (pc) {
-          const videoTrack = localStream.getVideoTracks()[0];
-          const audioTrack = localStream.getAudioTracks()[0];
-          
-          const senders = pc.getSenders();
-          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-          const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-          
-          if (videoSender) videoSender.replaceTrack(videoTrack);
-          if (audioSender) audioSender.replaceTrack(audioTrack);
-        }
-      } catch (err) {
-        console.error('Error restarting camera:', err);
-      }
-    }
-
     // Update connection time
     function updateConnectionTime() {
       if (!connectionStartTime) return;
@@ -396,7 +403,7 @@
       const secs = seconds % 60;
       connectionTime.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
       
-      // Enable front camera after 1 minute
+      // Enable camera flip button after 1 minute
       if (seconds >= 60) {
         flipCameraBtn.classList.remove('hidden');
       }
@@ -479,6 +486,7 @@
         .then((stream) => {
           localStream = stream;
           localVideo.srcObject = stream;
+          localVideo.classList.add('mirror-video');
           stream.getTracks().forEach(track => pc.addTrack(track, stream));
         })
         .catch(err => {

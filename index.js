@@ -2,8 +2,9 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const countries = require('countries-list').countries;
 const uaParser = require('ua-parser-js');
+const requestIp = require('request-ip');
+const geoip = require('geoip-lite');
 
 const app = express();
 const server = http.createServer(app);
@@ -14,52 +15,90 @@ const io = new Server(server, {
   }
 });
 
+// Built-in country data
+const countries = {
+  "US": { name: "United States", emoji: "🇺🇸" },
+  "GB": { name: "United Kingdom", emoji: "🇬🇧" },
+  "CA": { name: "Canada", emoji: "🇨🇦" },
+  "AU": { name: "Australia", emoji: "🇦🇺" },
+  // Add more countries as needed
+  "KE": { name: "Kenya", emoji: "🇰🇪" },
+  "NG": { name: "Nigeria", emoji: "🇳🇬" },
+  "ZA": { name: "South Africa", emoji: "🇿🇦" },
+  "IN": { name: "India", emoji: "🇮🇳" },
+  "CN": { name: "China", emoji: "🇨🇳" },
+  "JP": { name: "Japan", emoji: "🇯🇵" },
+  "BR": { name: "Brazil", emoji: "🇧🇷" },
+  "FR": { name: "France", emoji: "🇫🇷" },
+  "DE": { name: "Germany", emoji: "🇩🇪" },
+  "IT": { name: "Italy", emoji: "🇮🇹" },
+  "ES": { name: "Spain", emoji: "🇪🇸" },
+  "RU": { name: "Russia", emoji: "🇷🇺" },
+  "MX": { name: "Mexico", emoji: "🇲🇽" }
+};
+
+function getCountryFromIP(ip) {
+  // For local testing
+  if (ip === '::1' || ip === '127.0.0.1') {
+    return { 
+      code: 'KE', 
+      name: 'Kenya', 
+      emoji: '🇰🇪',
+      isUsingVPN: false
+    };
+  }
+
+  const geo = geoip.lookup(ip);
+  if (!geo) return null;
+
+  const countryCode = geo.country;
+  const country = countries[countryCode] || { 
+    name: 'Unknown', 
+    emoji: '🌐',
+    isUsingVPN: Math.random() < 0.2
+  };
+
+  return {
+    code: countryCode,
+    name: country.name,
+    emoji: country.emoji,
+    isUsingVPN: country.isUsingVPN || Math.random() < 0.2
+  };
+}
+
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Serve Socket.io client
-app.get('/socket.io/socket.io.js', (req, res) => {
-  res.sendFile(path.join(__dirname, 'node_modules/socket.io/client-dist/socket.io.js'));
-});
+app.use(requestIp.mw());
 
 // Fake user count (starts at 600)
 let fakeUserCount = 600;
 setInterval(() => {
-  // Random fluctuation between -5 and +5
   fakeUserCount += Math.floor(Math.random() * 11) - 5;
-  // Keep between 590-610
   fakeUserCount = Math.max(590, Math.min(610, fakeUserCount));
   io.emit('user-count', fakeUserCount);
 }, 10000);
 
-// Country data
-const countryCodes = Object.keys(countries);
-function getRandomCountry() {
-  const code = countryCodes[Math.floor(Math.random() * countryCodes.length)];
-  return {
-    code,
-    name: countries[code].name,
-    emoji: countries[code].emoji
-  };
-}
-
 // Queue system
 let waitingUser = null;
-
-// User data storage
 const users = new Map();
 
 io.on('connection', (socket) => {
-  // Initialize user data
+  const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+  const country = getCountryFromIP(ip) || { 
+    code: 'US', 
+    name: 'Unknown', 
+    emoji: '🌐',
+    isUsingVPN: Math.random() < 0.2
+  };
+
   const userAgent = uaParser(socket.handshake.headers['user-agent']);
-  const country = getRandomCountry();
   
   const userData = {
     id: 'user_' + Math.random().toString(36).substr(2, 8),
     username: `Stranger-${Math.floor(1000 + Math.random() * 9000)}`,
     country,
-    isUsingVPN: Math.random() < 0.2, // 20% chance of "using VPN"
-    isVirtualCam: Math.random() < 0.1, // 10% chance of "virtual cam"
+    isUsingVPN: country.isUsingVPN,
+    isVirtualCam: Math.random() < 0.1,
     connectionTime: null,
     partner: null
   };
