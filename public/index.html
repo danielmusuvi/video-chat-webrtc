@@ -8,36 +8,195 @@
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    /* ... (keep all existing styles) ... */
+    #messages::-webkit-scrollbar {
+      width: 6px;
+    }
+    #messages::-webkit-scrollbar-track {
+      background: #e5e7eb;
+    }
+    #messages::-webkit-scrollbar-thumb {
+      background: #9ca3af;
+    }
+    .dark #messages::-webkit-scrollbar-track {
+      background: #374151;
+    }
+    .dark #messages::-webkit-scrollbar-thumb {
+      background: #6b7280;
+    }
+    .video-container {
+      position: relative;
+      overflow: hidden;
+    }
+    .video-watermark {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      color: rgba(255,255,255,0.7);
+      font-size: 12px;
+    }
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 20px;
+    }
+    .typing-dot {
+      width: 6px;
+      height: 6px;
+      background-color: #9ca3af;
+      border-radius: 50%;
+      animation: typing 1.4s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    .typing-dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    @keyframes typing {
+      0%, 60%, 100% { opacity: 0.3; }
+      30% { opacity: 1; }
+    }
+    .connection-time {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+    .country-flag {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 24px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 4px;
+    }
+    .warning-banner {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    .mirror-video {
+      transform: scaleX(-1);
+    }
+    .username-display {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-  <!-- ... (keep all existing HTML structure) ... -->
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <header class="flex justify-between items-center mb-6">
+      <div class="flex items-center gap-4">
+        <h1 class="text-2xl font-bold text-indigo-600 dark:text-indigo-500">Omiglo Video Chat</h1>
+        <div class="flex items-center gap-2 bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-full text-sm">
+          <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+          <span id="user-count">600</span> online
+        </div>
+      </div>
+      <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+        <i id="theme-icon" class="fas fa-sun"></i>
+      </button>
+    </header>
+
+    <div id="status" class="text-lg font-medium mb-6 p-3 rounded-lg bg-gray-200 dark:bg-gray-800">
+      <div class="flex justify-between items-center">
+        <span id="status-text">Connecting...</span>
+        <div id="typing-indicator" class="typing-indicator hidden">
+          <span id="typing-id"></span>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="video-area" class="hidden mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Stranger Video -->
+        <div class="video-container bg-black rounded-lg aspect-video">
+          <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+          <div id="remote-country" class="country-flag"></div>
+          <div id="remote-warning" class="hidden"></div>
+          <div id="stranger-username" class="username-display">Stranger</div>
+          <div id="connection-time" class="connection-time hidden">00:00</div>
+        </div>
+        
+        <!-- Local Video -->
+        <div class="video-container bg-black rounded-lg aspect-video">
+          <video id="localVideo" autoplay playsinline muted class="w-full h-full object-cover mirror-video"></video>
+          <div id="local-country" class="country-flag"></div>
+          <div class="username-display">You</div>
+          <div class="absolute top-2 right-2 flex gap-2">
+            <button id="flip-camera" class="p-2 bg-black/50 text-white rounded-full hidden" title="Flip Camera">
+              <i class="fas fa-camera-rotate"></i>
+            </button>
+            <button id="mute-camera" class="p-2 bg-black/50 text-white rounded-full" title="Mute Video">
+              <i class="fas fa-video"></i>
+            </button>
+            <button id="mute-mic" class="p-2 bg-black/50 text-white rounded-full" title="Mute Mic">
+              <i class="fas fa-microphone"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+      <ul id="messages" class="max-h-64 overflow-y-auto space-y-2"></ul>
+    </div>
+
+    <form id="form" class="flex gap-2 mb-6">
+      <input id="input" autocomplete="off" placeholder="Type a message..." 
+        class="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-800">
+      <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">
+        <i class="fas fa-paper-plane"></i>
+      </button>
+    </form>
+
+    <button id="new" class="w-full px-6 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg font-medium flex items-center justify-center gap-2">
+      <i class="fas fa-rotate"></i>
+      <span>Find New Stranger</span>
+    </button>
+  </div>
 
   <script>
-    // Theme Management - FIXED
+    // Theme Management
     const themeToggle = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
-    const html = document.documentElement;
     
     function setTheme(theme) {
       if (theme === 'dark') {
-        html.classList.add('dark');
+        document.documentElement.classList.add('dark');
         themeIcon.classList.replace('fa-sun', 'fa-moon');
         localStorage.setItem('theme', 'dark');
       } else {
-        html.classList.remove('dark');
+        document.documentElement.classList.remove('dark');
         themeIcon.classList.replace('fa-moon', 'fa-sun');
         localStorage.setItem('theme', 'light');
       }
     }
 
     themeToggle.addEventListener('click', () => {
-      const isDark = html.classList.contains('dark');
+      const isDark = document.documentElement.classList.contains('dark');
       setTheme(isDark ? 'light' : 'dark');
     });
 
-    // Initialize theme
+    // Initialize theme based on system preference or saved preference
     const savedTheme = localStorage.getItem('theme');
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
@@ -56,7 +215,6 @@
     // DOM Elements
     const statusText = document.getElementById('status-text');
     const userCount = document.getElementById('user-count');
-    const strangerId = document.getElementById('stranger-id');
     const messages = document.getElementById('messages');
     const form = document.getElementById('form');
     const input = document.getElementById('input');
@@ -73,6 +231,7 @@
     const localCountry = document.getElementById('local-country');
     const remoteWarning = document.getElementById('remote-warning');
     const connectionTime = document.getElementById('connection-time');
+    const strangerUsername = document.getElementById('stranger-username');
 
     // User data
     let userData = {};
@@ -158,14 +317,8 @@
       statusText.textContent = 'Looking for a new stranger...';
       videoArea.classList.add('hidden');
       clearInterval(connectionTimer);
-      if (pc) {
-        pc.close();
-        pc = null;
-      }
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-      }
+      if (pc) pc.close();
+      if (localStream) localStream.getTracks().forEach(track => track.stop());
     };
 
     // Add message to chat
@@ -173,7 +326,7 @@
       const li = document.createElement('li');
       li.className = `px-3 py-2 rounded-lg ${type === 'self' ? 'bg-indigo-100 dark:bg-indigo-900' : 'bg-gray-100 dark:bg-gray-700'}`;
       
-      const sender = type === 'self' ? 'You' : msg.sender === partnerData.id ? 'Stranger' : msg.sender;
+      const sender = type === 'self' ? 'You' : msg.sender === partnerData?.id ? 'Stranger' : msg.sender;
       li.textContent = `${sender}: ${msg.text}`;
       
       messages.appendChild(li);
@@ -189,18 +342,16 @@
       if (!localStream) return;
       
       isFrontCamera = !isFrontCamera;
+      const videoTrack = localStream.getVideoTracks()[0];
       
       try {
-        // Stop current tracks
         localStream.getTracks().forEach(track => track.stop());
         
-        // Get new stream with opposite facing mode
         localStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: isFrontCamera ? 'user' : 'environment' },
           audio: true
         });
         
-        // Apply mirror effect only for front camera
         if (isFrontCamera) {
           localVideo.classList.add('mirror-video');
         } else {
@@ -209,7 +360,6 @@
         
         localVideo.srcObject = localStream;
         
-        // Replace tracks in peer connection if exists
         if (pc) {
           const videoTrack = localStream.getVideoTracks()[0];
           const audioTrack = localStream.getAudioTracks()[0];
@@ -222,7 +372,6 @@
           if (audioSender) audioSender.replaceTrack(audioTrack);
         }
         
-        // Update button icon
         flipCameraBtn.innerHTML = isFrontCamera ? 
           '<i class="fas fa-camera-rotate"></i>' : 
           '<i class="fas fa-camera"></i>';
@@ -248,7 +397,6 @@
       muteMicBtn.innerHTML = isMicMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
     }
 
-    // Update connection time
     function updateConnectionTime() {
       if (!connectionStartTime) return;
       
@@ -257,7 +405,6 @@
       const secs = seconds % 60;
       connectionTime.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
       
-      // Enable camera flip button after 1 minute
       if (seconds >= 60) {
         flipCameraBtn.classList.remove('hidden');
       }
@@ -266,8 +413,8 @@
     // Socket events
     socket.on('paired', (data) => {
       partnerData = data.partner;
-      statusText.textContent = `Connected to ${partnerData.id}`;
-      strangerId.textContent = partnerData.id;
+      statusText.textContent = `Connected to ${partnerData.username}`;
+      strangerUsername.textContent = partnerData.username;
       remoteCountry.textContent = partnerData.country.emoji;
       remoteCountry.title = partnerData.country.name;
       
@@ -312,13 +459,10 @@
       }, 'system');
       videoArea.classList.add('hidden');
       clearInterval(connectionTimer);
-      if (pc) {
-        pc.close();
-        pc = null;
-      }
+      if (pc) pc.close();
     });
 
-    // WebRTC functions - FIXED for stranger camera
+    // WebRTC functions
     function startWebRTC() {
       pc = new RTCPeerConnection({
         iceServers: [
@@ -329,61 +473,42 @@
       });
 
       pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          socket.emit('webrtc-ice-candidate', {
-            candidate: e.candidate,
-            sdpMid: e.candidate.sdpMid,
-            sdpMLineIndex: e.candidate.sdpMLineIndex
-          });
-        }
+        if (e.candidate) socket.emit('webrtc-ice-candidate', e.candidate);
       };
 
       pc.ontrack = (e) => {
-        if (!remoteVideo.srcObject) {
-          remoteVideo.srcObject = new MediaStream();
-        }
-        remoteVideo.srcObject.addTrack(e.track);
-      };
-
-      pc.onnegotiationneeded = async () => {
-        try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          socket.emit('webrtc-offer', offer);
-        } catch (err) {
-          console.error('Error creating offer:', err);
-        }
+        remoteVideo.srcObject = e.streams[0];
       };
 
       navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'user' }, 
         audio: true 
       })
-        .then((stream) => {
-          localStream = stream;
-          localVideo.srcObject = stream;
-          localVideo.classList.add('mirror-video');
-          
-          // Add all tracks to peer connection
-          stream.getTracks().forEach(track => {
-            pc.addTrack(track, stream);
-          });
-          
-          // Enable mute buttons
-          muteCameraBtn.disabled = false;
-          muteMicBtn.disabled = false;
-        })
-        .catch(err => {
-          console.error('Media error:', err);
-          statusText.textContent = 'Could not access camera/microphone';
-        });
+      .then((stream) => {
+        localStream = stream;
+        localVideo.srcObject = stream;
+        localVideo.classList.add('mirror-video');
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        
+        // Create and send offer
+        pc.createOffer()
+          .then(offer => pc.setLocalDescription(offer))
+          .then(() => {
+            socket.emit('webrtc-offer', pc.localDescription);
+          })
+          .catch(err => console.error('Error creating offer:', err));
+      })
+      .catch(err => {
+        console.error('Media error:', err);
+        statusText.textContent = 'Could not access camera/microphone';
+      });
     }
 
     // WebRTC signaling events
     socket.on('webrtc-offer', async (offer) => {
       if (!pc) startWebRTC();
       try {
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await pc.setRemoteDescription(offer);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('webrtc-answer', answer);
@@ -394,18 +519,16 @@
 
     socket.on('webrtc-answer', async (answer) => {
       try {
-        if (pc) {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        }
+        await pc.setRemoteDescription(answer);
       } catch (err) {
         console.error('Error handling answer:', err);
       }
     });
 
-    socket.on('webrtc-ice-candidate', async (data) => {
+    socket.on('webrtc-ice-candidate', async (candidate) => {
       try {
-        if (pc && data.candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        if (pc && candidate) {
+          await pc.addIceCandidate(candidate);
         }
       } catch (err) {
         console.error('Error adding ICE candidate:', err);

@@ -15,7 +15,6 @@ const io = new Server(server, {
   }
 });
 
-// Built-in country data
 const countries = {
   "US": { name: "United States", emoji: "🇺🇸" },
   "GB": { name: "United Kingdom", emoji: "🇬🇧" },
@@ -64,11 +63,9 @@ function getCountryFromIP(ip) {
   };
 }
 
-// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(requestIp.mw());
 
-// Fake user count
 let fakeUserCount = 600;
 setInterval(() => {
   fakeUserCount += Math.floor(Math.random() * 11) - 5;
@@ -76,7 +73,6 @@ setInterval(() => {
   io.emit('user-count', fakeUserCount);
 }, 10000);
 
-// Queue system
 let waitingUser = null;
 const users = new Map();
 
@@ -107,7 +103,6 @@ io.on('connection', (socket) => {
 
   console.log(`🟢 ${userData.id} connected from ${country.name}`);
 
-  // Pairing logic
   if (waitingUser) {
     const partner = waitingUser;
     const partnerData = users.get(partner.id);
@@ -122,6 +117,7 @@ io.on('connection', (socket) => {
     socket.emit('paired', { 
       partner: {
         id: partnerData.id,
+        username: partnerData.username,
         country: partnerData.country,
         isUsingVPN: partnerData.isUsingVPN,
         isVirtualCam: partnerData.isVirtualCam
@@ -131,6 +127,7 @@ io.on('connection', (socket) => {
     partner.emit('paired', { 
       partner: {
         id: userData.id,
+        username: userData.username,
         country: userData.country,
         isUsingVPN: userData.isUsingVPN,
         isVirtualCam: userData.isVirtualCam
@@ -144,7 +141,6 @@ io.on('connection', (socket) => {
     console.log(`⏳ ${userData.id} is waiting...`);
   }
 
-  // Text chat
   socket.on('chat message', (msg) => {
     const user = users.get(socket.id);
     if (user.partner) {
@@ -156,7 +152,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Typing indicators
   socket.on('typing', () => {
     const user = users.get(socket.id);
     if (user.partner) {
@@ -171,7 +166,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Find new stranger
   socket.on('find new', () => {
     const user = users.get(socket.id);
     console.log(`${user.id} is finding a new stranger.`);
@@ -199,6 +193,7 @@ io.on('connection', (socket) => {
       socket.emit('paired', { 
         partner: {
           id: partnerData.id,
+          username: partnerData.username,
           country: partnerData.country,
           isUsingVPN: partnerData.isUsingVPN,
           isVirtualCam: partnerData.isVirtualCam
@@ -208,6 +203,7 @@ io.on('connection', (socket) => {
       partner.emit('paired', { 
         partner: {
           id: user.id,
+          username: user.username,
           country: user.country,
           isUsingVPN: user.isUsingVPN,
           isVirtualCam: user.isVirtualCam
@@ -218,7 +214,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // WebRTC signaling
   const webrtcEvents = ['webrtc-offer', 'webrtc-answer', 'webrtc-ice-candidate'];
   webrtcEvents.forEach(event => {
     socket.on(event, (data) => {
@@ -229,7 +224,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Disconnect
   socket.on('disconnect', () => {
     const user = users.get(socket.id);
     if (!user) return;
@@ -251,7 +245,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
