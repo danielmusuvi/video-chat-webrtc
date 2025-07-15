@@ -4,57 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Omiglo Video Chat</title>
-  <!-- Preconnect to CDNs for faster loading -->
-  <link rel="preconnect" href="https://cdn.tailwindcss.com">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  
-  <!-- Tailwind CSS with custom config -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            primary: {
-              500: '#6366f1',
-              600: '#4f46e5',
-            },
-          },
-          animation: {
-            'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            'typing': 'typing 1.8s ease-in-out infinite',
-            'fade-in': 'fadeIn 0.3s ease-in-out',
-          },
-          keyframes: {
-            typing: {
-              '0%, 100%': { opacity: 0.5 },
-              '50%': { opacity: 1 },
-            },
-            fadeIn: {
-              '0%': { opacity: 0 },
-              '100%': { opacity: 1 },
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <!-- Font Awesome for icons -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    /* Custom styles */
     #messages::-webkit-scrollbar {
       width: 6px;
     }
     #messages::-webkit-scrollbar-track {
       background: #e5e7eb;
-      border-radius: 3px;
     }
     #messages::-webkit-scrollbar-thumb {
       background: #9ca3af;
-      border-radius: 3px;
     }
     .dark #messages::-webkit-scrollbar-track {
       background: #374151;
@@ -65,201 +26,185 @@
     .video-container {
       position: relative;
       overflow: hidden;
-      border-radius: 0.5rem;
     }
     .video-watermark {
       position: absolute;
       bottom: 10px;
       right: 10px;
-      color: rgba(255, 255, 255, 0.7);
+      color: rgba(255,255,255,0.7);
       font-size: 12px;
-      pointer-events: none;
-    }
-    .video-controls {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      padding: 8px;
-      display: none;
-      justify-content: flex-end;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 100%);
-    }
-    .video-container:hover .video-controls {
-      display: flex;
     }
     .typing-indicator {
       display: flex;
       align-items: center;
       gap: 4px;
       height: 20px;
-      margin-left: 8px;
-      font-size: 14px;
-      color: #6b7280;
     }
     .typing-dot {
       width: 6px;
       height: 6px;
       background-color: #9ca3af;
       border-radius: 50%;
+      animation: typing 1.4s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    .typing-dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    @keyframes typing {
+      0%, 60%, 100% { opacity: 0.3; }
+      30% { opacity: 1; }
+    }
+    .connection-time {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+    .country-flag {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 24px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 4px;
+    }
+    .warning-banner {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
     }
   </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-200">
-  <div class="min-h-screen flex flex-col">
-    <!-- Header -->
-    <header class="bg-white dark:bg-gray-800 shadow-sm">
-      <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-        <h1 class="text-xl font-bold text-primary-600 dark:text-primary-500 flex items-center gap-2">
-          <i class="fas fa-video"></i>
-          <span>Omiglo.com</span>
-        </h1>
-        <div class="flex items-center gap-4">
-          <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-            <i id="theme-icon" class="fas fa-sun"></i>
-          </button>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <header class="flex justify-between items-center mb-6">
+      <div class="flex items-center gap-4">
+        <h1 class="text-2xl font-bold text-indigo-600 dark:text-indigo-500">Omiglo Video Chat</h1>
+        <div class="flex items-center gap-2 bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded-full text-sm">
+          <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+          <span id="user-count">600</span> online
         </div>
       </div>
+      <button id="theme-toggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+        <i id="theme-icon" class="fas fa-sun"></i>
+      </button>
     </header>
 
-    <!-- Main Content -->
-    <main class="flex-1 container mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6 max-w-7xl">
-      <!-- Video Area (Top on mobile, left on desktop) -->
-      <div class="w-full lg:w-2/3 order-1 lg:order-1">
-        <div id="video-area" class="hidden bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Stranger Video (Top on mobile) -->
-            <div class="video-container bg-black aspect-video">
-              <video id="remoteVideo" autoplay class="w-full h-full object-cover"></video>
-              <div class="video-watermark">omiglo.com</div>
-              <div class="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
-                <span id="stranger-name">Stranger</span>
-              </div>
-            </div>
-            
-            <!-- Local Video -->
-            <div class="video-container bg-black aspect-video">
-              <video id="localVideo" autoplay muted class="w-full h-full object-cover"></video>
-              <div class="video-watermark">omiglo.com</div>
-              <div class="video-controls">
-                <button id="flip-camera" class="p-2 text-white hover:text-primary-500 transition-colors" title="Flip Camera">
-                  <i class="fas fa-camera-rotate"></i>
-                </button>
-                <button id="mute-camera" class="p-2 text-white hover:text-primary-500 transition-colors" title="Mute Video">
-                  <i class="fas fa-video-slash"></i>
-                </button>
-                <button id="mute-mic" class="p-2 text-white hover:text-primary-500 transition-colors" title="Mute Mic">
-                  <i class="fas fa-microphone-slash"></i>
-                </button>
-              </div>
-              <div class="absolute bottom-2 left-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
-                You
-              </div>
-            </div>
-          </div>
+    <div id="status" class="text-lg font-medium mb-6 p-3 rounded-lg bg-gray-200 dark:bg-gray-800">
+      <div class="flex justify-between items-center">
+        <span id="status-text">Connecting...</span>
+        <div id="typing-indicator" class="typing-indicator hidden">
+          <span id="typing-id"></span>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
         </div>
-
-        <!-- Status Area -->
-        <div id="status" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mt-4 text-center">
-          <div class="flex justify-center items-center gap-2">
-            <span id="status-text">Connecting...</span>
-            <div id="typing-indicator" class="typing-indicator hidden">
-              <span id="typing-name"></span>
-              <div class="typing-dot animation-delay-0"></div>
-              <div class="typing-dot animation-delay-150"></div>
-              <div class="typing-dot animation-delay-300"></div>
-            </div>
+      </div>
+    </div>
+    
+    <div id="video-area" class="hidden mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Stranger Video -->
+        <div class="video-container bg-black rounded-lg aspect-video">
+          <video id="remoteVideo" autoplay class="w-full h-full object-cover"></video>
+          <div id="remote-country" class="country-flag"></div>
+          <div id="remote-warning" class="hidden"></div>
+          <div class="video-watermark">omiglo.com</div>
+          <div class="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">
+            <span id="stranger-id">Stranger</span>
+          </div>
+          <div id="connection-time" class="connection-time hidden">00:00</div>
+        </div>
+        
+        <!-- Local Video -->
+        <div class="video-container bg-black rounded-lg aspect-video">
+          <video id="localVideo" autoplay muted class="w-full h-full object-cover"></video>
+          <div id="local-country" class="country-flag"></div>
+          <div class="video-watermark">omiglo.com</div>
+          <div class="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm">You</div>
+          <div class="absolute top-2 right-2 flex gap-2">
+            <button id="flip-camera" class="p-2 bg-black/50 text-white rounded-full hidden" title="Front Camera">
+              <i class="fas fa-camera-rotate"></i>
+            </button>
+            <button id="mute-camera" class="p-2 bg-black/50 text-white rounded-full" title="Mute Video">
+              <i class="fas fa-video"></i>
+            </button>
+            <button id="mute-mic" class="p-2 bg-black/50 text-white rounded-full" title="Mute Mic">
+              <i class="fas fa-microphone"></i>
+            </button>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Chat Area -->
-      <div class="w-full lg:w-1/3 order-2 lg:order-2 flex flex-col">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md flex-1 flex flex-col">
-          <div class="p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 class="font-semibold">Chat Messages</h2>
-          </div>
-          <ul id="messages" class="flex-1 overflow-y-auto p-4 space-y-2"></ul>
-          <form id="form" class="p-4 border-t border-gray-200 dark:border-gray-700">
-            <div class="flex gap-2">
-              <input id="input" autocomplete="off" placeholder="Type a message..." 
-                class="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-800">
-              <button type="submit" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">
-                <i class="fas fa-paper-plane"></i>
-              </button>
-            </div>
-          </form>
-        </div>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+      <ul id="messages" class="max-h-64 overflow-y-auto space-y-2"></ul>
+    </div>
 
-        <!-- Find New Stranger Button -->
-        <button id="new" class="mt-4 w-full px-6 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
-          <i class="fas fa-rotate"></i>
-          <span>Find New Stranger</span>
-        </button>
-      </div>
-    </main>
+    <form id="form" class="flex gap-2 mb-6">
+      <input id="input" autocomplete="off" placeholder="Type a message..." 
+        class="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-800">
+      <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">
+        <i class="fas fa-paper-plane"></i>
+      </button>
+    </form>
+
+    <button id="new" class="w-full px-6 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg font-medium flex items-center justify-center gap-2">
+      <i class="fas fa-rotate"></i>
+      <span>Find New Stranger</span>
+    </button>
   </div>
 
-  <!-- Socket.io and custom JS -->
-  <script src="/socket.io/socket.io.js"></script>
   <script>
     // Theme Management
     const themeToggle = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
     
-    // Initialize theme
-    const savedTheme = localStorage.getItem('theme') || 'system';
-    setTheme(savedTheme);
+    function setTheme(theme) {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        themeIcon.classList.replace('fa-sun', 'fa-moon');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        themeIcon.classList.replace('fa-moon', 'fa-sun');
+        localStorage.setItem('theme', 'light');
+      }
+    }
 
     themeToggle.addEventListener('click', () => {
-      const currentTheme = localStorage.getItem('theme') || 'system';
-      let newTheme;
-      
-      if (currentTheme === 'dark') newTheme = 'light';
-      else if (currentTheme === 'light') newTheme = 'system';
-      else newTheme = 'dark';
-      
-      setTheme(newTheme);
-      localStorage.setItem('theme', newTheme);
+      const isDark = document.documentElement.classList.contains('dark');
+      setTheme(isDark ? 'light' : 'dark');
     });
 
-    function setTheme(theme) {
-      if (theme === 'system') {
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.classList.toggle('dark', systemPrefersDark);
-        updateThemeIcon(systemPrefersDark ? 'dark' : 'light');
-      } else {
-        document.documentElement.classList.toggle('dark', theme === 'dark');
-        updateThemeIcon(theme);
-      }
+    // Initialize theme
+    if (localStorage.getItem('theme') === 'dark' || 
+        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      setTheme('dark');
+    } else {
+      setTheme('light');
     }
-
-    function updateThemeIcon(theme) {
-      if (theme === 'dark') {
-        themeIcon.classList.replace('fa-sun', 'fa-moon');
-      } else {
-        themeIcon.classList.replace('fa-moon', 'fa-sun');
-      }
-    }
-
-    // Watch for system theme changes
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      if (localStorage.getItem('theme') === 'system') {
-        document.documentElement.classList.toggle('dark', e.matches);
-        updateThemeIcon(e.matches ? 'dark' : 'light');
-      }
-    });
 
     // Chat and Video Functionality
-    const socket = io({
+    const socket = io(window.location.origin, {
       reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      timeout: 20000
+      reconnectionDelay: 1000
     });
 
     // DOM Elements
     const statusText = document.getElementById('status-text');
-    const strangerName = document.getElementById('stranger-name');
+    const userCount = document.getElementById('user-count');
+    const strangerId = document.getElementById('stranger-id');
     const messages = document.getElementById('messages');
     const form = document.getElementById('form');
     const input = document.getElementById('input');
@@ -268,24 +213,66 @@
     const remoteVideo = document.getElementById('remoteVideo');
     const newBtn = document.getElementById('new');
     const typingIndicator = document.getElementById('typing-indicator');
-    const typingName = document.getElementById('typing-name');
+    const typingId = document.getElementById('typing-id');
     const flipCameraBtn = document.getElementById('flip-camera');
     const muteCameraBtn = document.getElementById('mute-camera');
     const muteMicBtn = document.getElementById('mute-mic');
+    const remoteCountry = document.getElementById('remote-country');
+    const localCountry = document.getElementById('local-country');
+    const remoteWarning = document.getElementById('remote-warning');
+    const connectionTime = document.getElementById('connection-time');
 
-    // WebRTC Variables
+    // User data
+    let userData = {};
+    let partnerData = {};
     let pc;
     let localStream;
     let isCameraFlipped = false;
     let isVideoMuted = false;
     let isMicMuted = false;
-    const pcConfig = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' }
-      ]
-    };
+    let connectionStartTime = null;
+    let connectionTimer = null;
+
+    // Connection status
+    socket.on('connect', () => {
+      statusText.textContent = 'Waiting for a stranger...';
+    });
+
+    socket.on('disconnect', () => {
+      statusText.textContent = 'Disconnected. Trying to reconnect...';
+      clearInterval(connectionTimer);
+    });
+
+    socket.on('connect_error', () => {
+      statusText.textContent = 'Connection error. Refresh the page.';
+    });
+
+    // User data initialization
+    socket.on('user-data', (data) => {
+      userData = data;
+      localCountry.textContent = data.country.emoji;
+      localCountry.title = data.country.name;
+      
+      if (data.isUsingVPN) {
+        showWarning("Warning: You appear to be using a VPN. This may affect your experience.");
+      }
+      if (data.isVirtualCam) {
+        showWarning("Warning: Virtual camera detected. Please use a real camera for better experience.");
+      }
+    });
+
+    function showWarning(message) {
+      const warning = document.createElement('div');
+      warning.className = 'warning-banner bg-yellow-500 text-white p-2 text-center text-sm';
+      warning.textContent = message;
+      document.body.prepend(warning);
+      setTimeout(() => warning.remove(), 5000);
+    }
+
+    // User count update
+    socket.on('user-count', (count) => {
+      userCount.textContent = count;
+    });
 
     // Typing detection
     let typingTimeout;
@@ -301,7 +288,11 @@
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       if (input.value.trim()) {
-        addMessage('You: ' + input.value, 'self');
+        addMessage({
+          text: input.value,
+          sender: userData.id,
+          timestamp: Date.now()
+        }, 'self');
         socket.emit('chat message', input.value);
         input.value = '';
         socket.emit('stop-typing');
@@ -314,21 +305,19 @@
       messages.innerHTML = '';
       statusText.textContent = 'Looking for a new stranger...';
       videoArea.classList.add('hidden');
-      if (pc) {
-        pc.close();
-        pc = null;
-      }
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-      }
+      clearInterval(connectionTimer);
+      if (pc) pc.close();
+      if (localStream) localStream.getTracks().forEach(track => track.stop());
     };
 
     // Add message to chat
     function addMessage(msg, type = 'other') {
       const li = document.createElement('li');
-      li.className = `px-3 py-2 rounded-lg ${type === 'self' ? 'bg-primary-100 dark:bg-primary-900 ml-8' : 'bg-gray-100 dark:bg-gray-700 mr-8'}`;
-      li.textContent = msg;
+      li.className = `px-3 py-2 rounded-lg ${type === 'self' ? 'bg-indigo-100 dark:bg-indigo-900' : 'bg-gray-100 dark:bg-gray-700'}`;
+      
+      const sender = type === 'self' ? 'You' : msg.sender === partnerData.id ? 'Stranger' : msg.sender;
+      li.textContent = `${sender}: ${msg.text}`;
+      
       messages.appendChild(li);
       messages.scrollTop = messages.scrollHeight;
     }
@@ -349,7 +338,6 @@
           const newFacingMode = settings.facingMode === 'user' ? 'environment' : 'user';
           restartCamera(newFacingMode);
         } else {
-          // For browsers that don't support facingMode
           localVideo.style.transform = isCameraFlipped ? 'scaleX(-1)' : 'scaleX(1)';
         }
       }
@@ -360,8 +348,7 @@
       
       isVideoMuted = !isVideoMuted;
       localStream.getVideoTracks()[0].enabled = !isVideoMuted;
-      muteCameraBtn.innerHTML = isVideoMuted ? '<i class="fas fa-video"></i>' : '<i class="fas fa-video-slash"></i>';
-      muteCameraBtn.title = isVideoMuted ? 'Unmute Video' : 'Mute Video';
+      muteCameraBtn.innerHTML = isVideoMuted ? '<i class="fas fa-video-slash"></i>' : '<i class="fas fa-video"></i>';
     }
 
     function toggleMicMute() {
@@ -369,8 +356,7 @@
       
       isMicMuted = !isMicMuted;
       localStream.getAudioTracks()[0].enabled = !isMicMuted;
-      muteMicBtn.innerHTML = isMicMuted ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
-      muteMicBtn.title = isMicMuted ? 'Unmute Mic' : 'Mute Mic';
+      muteMicBtn.innerHTML = isMicMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
     }
 
     async function restartCamera(facingMode) {
@@ -401,20 +387,45 @@
       }
     }
 
-    // Socket.io Events
-    socket.on('your-name', (name) => {
-      statusText.textContent = `You are ${name}`;
-    });
+    // Update connection time
+    function updateConnectionTime() {
+      if (!connectionStartTime) return;
+      
+      const seconds = Math.floor((Date.now() - connectionStartTime) / 1000);
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      connectionTime.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      
+      // Enable front camera after 1 minute
+      if (seconds >= 60) {
+        flipCameraBtn.classList.remove('hidden');
+      }
+    }
 
-    socket.on('waiting', () => {
-      statusText.textContent = 'Waiting for a stranger...';
-    });
-
+    // Socket events
     socket.on('paired', (data) => {
-      statusText.textContent = `Connected to ${data.with}`;
-      strangerName.textContent = data.with;
-      addMessage(`--- Connected to ${data.with} ---`, 'system');
+      partnerData = data.partner;
+      statusText.textContent = `Connected to ${partnerData.id}`;
+      strangerId.textContent = partnerData.id;
+      remoteCountry.textContent = partnerData.country.emoji;
+      remoteCountry.title = partnerData.country.name;
+      
+      if (partnerData.isUsingVPN) {
+        remoteWarning.className = 'absolute top-10 left-2 bg-red-500 text-white px-2 py-1 rounded text-xs';
+        remoteWarning.textContent = 'VPN Detected';
+        remoteWarning.classList.remove('hidden');
+      }
+      
+      if (partnerData.isVirtualCam) {
+        remoteWarning.className = 'absolute top-10 left-2 bg-orange-500 text-white px-2 py-1 rounded text-xs';
+        remoteWarning.textContent = 'Virtual Cam';
+        remoteWarning.classList.remove('hidden');
+      }
+      
       videoArea.classList.remove('hidden');
+      connectionStartTime = Date.now();
+      connectionTime.classList.remove('hidden');
+      connectionTimer = setInterval(updateConnectionTime, 1000);
       startWebRTC();
     });
 
@@ -422,8 +433,8 @@
       addMessage(msg, 'other');
     });
 
-    socket.on('typing', (username) => {
-      typingName.textContent = username;
+    socket.on('typing', (userId) => {
+      typingId.textContent = userId === partnerData?.id ? 'Stranger' : userId;
       typingIndicator.classList.remove('hidden');
     });
 
@@ -432,46 +443,43 @@
     });
 
     socket.on('stranger disconnected', () => {
-      statusText.textContent = 'Stranger disconnected 😢';
-      addMessage('--- Stranger disconnected ---', 'system');
+      statusText.textContent = 'Stranger disconnected';
+      addMessage({
+        text: '--- Stranger disconnected ---',
+        sender: 'system',
+        timestamp: Date.now()
+      }, 'system');
       videoArea.classList.add('hidden');
-      if (pc) {
-        pc.close();
-        pc = null;
-      }
+      clearInterval(connectionTimer);
+      if (pc) pc.close();
     });
 
-    // WebRTC Functions
+    // WebRTC functions
     function startWebRTC() {
-      pc = new RTCPeerConnection(pcConfig);
-      
-      // Set up event listeners
+      pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
+        ]
+      });
+
       pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          socket.emit('webrtc-ice-candidate', e.candidate);
-        }
+        if (e.candidate) socket.emit('webrtc-ice-candidate', e.candidate);
       };
 
       pc.ontrack = (e) => {
         remoteVideo.srcObject = e.streams[0];
       };
 
-      pc.onnegotiationneeded = async () => {
-        try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          socket.emit('webrtc-offer', offer);
-        } catch (err) {
-          console.error('Offer error:', err);
-        }
-      };
-
-      // Get user media and add tracks
-      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'user' }, 
+        audio: true 
+      })
         .then((stream) => {
           localStream = stream;
           localVideo.srcObject = stream;
-          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+          stream.getTracks().forEach(track => pc.addTrack(track, stream));
         })
         .catch(err => {
           console.error('Media error:', err);
@@ -479,7 +487,7 @@
         });
     }
 
-    // WebRTC Signaling Events
+    // WebRTC signaling events
     socket.on('webrtc-offer', async (offer) => {
       if (!pc) startWebRTC();
       try {
@@ -508,25 +516,6 @@
       } catch (err) {
         console.error('Error adding ICE candidate:', err);
       }
-    });
-
-    // Preload important assets
-    window.addEventListener('load', () => {
-      // Preload icons
-      const icons = [
-        'fa-video',
-        'fa-video-slash',
-        'fa-microphone',
-        'fa-microphone-slash',
-        'fa-camera-rotate',
-        'fa-paper-plane',
-        'fa-rotate',
-        'fa-sun',
-        'fa-moon'
-      ].forEach(icon => {
-        const img = new Image();
-        img.src = `https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/solid/${icon.split('-')[1]}.svg`;
-      });
     });
   </script>
 </body>

@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const countries = require('countries-list').countries;
+const uaParser = require('ua-parser-js');
 
 const app = express();
 const server = http.createServer(app);
@@ -20,62 +22,128 @@ app.get('/socket.io/socket.io.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'node_modules/socket.io/client-dist/socket.io.js'));
 });
 
-// Queue for waiting users
-let waitingUser = null;
+// Fake user count (starts at 600)
+let fakeUserCount = 600;
+setInterval(() => {
+  // Random fluctuation between -5 and +5
+  fakeUserCount += Math.floor(Math.random() * 11) - 5;
+  // Keep between 590-610
+  fakeUserCount = Math.max(590, Math.min(610, fakeUserCount));
+  io.emit('user-count', fakeUserCount);
+}, 10000);
 
-// Generate random username
-function genUsername() {
-  return 'User' + Math.floor(1000 + Math.random() * 9000);
+// Country data
+const countryCodes = Object.keys(countries);
+function getRandomCountry() {
+  const code = countryCodes[Math.floor(Math.random() * countryCodes.length)];
+  return {
+    code,
+    name: countries[code].name,
+    emoji: countries[code].emoji
+  };
 }
 
-io.on('connection', (socket) => {
-  socket.username = genUsername();
-  socket.emit('your-name', socket.username);
-  console.log(`🟢 ${socket.username} connected (${socket.id})`);
+// Queue system
+let waitingUser = null;
 
+// User data storage
+const users = new Map();
+
+io.on('connection', (socket) => {
+  // Initialize user data
+  const userAgent = uaParser(socket.handshake.headers['user-agent']);
+  const country = getRandomCountry();
+  
+  const userData = {
+    id: 'user_' + Math.random().toString(36).substr(2, 8),
+    username: `Stranger-${Math.floor(1000 + Math.random() * 9000)}`,
+    country,
+    isUsingVPN: Math.random() < 0.2, // 20% chance of "using VPN"
+    isVirtualCam: Math.random() < 0.1, // 10% chance of "virtual cam"
+    connectionTime: null,
+    partner: null
+  };
+  
+  users.set(socket.id, userData);
+  socket.emit('user-data', userData);
+  io.emit('user-count', fakeUserCount);
+
+  console.log(`🟢 ${userData.id} connected from ${country.name}`);
+
+  // Pairing logic
   if (waitingUser) {
     const partner = waitingUser;
-    socket.partner = partner;
-    partner.partner = socket;
+    const partnerData = users.get(partner.id);
+    
+    userData.partner = partner;
+    partnerData.partner = socket;
+    userData.connectionTime = Date.now();
+    partnerData.connectionTime = Date.now();
+    
     waitingUser = null;
 
-    socket.emit('paired', { with: partner.username });
-    partner.emit('paired', { with: socket.username });
-    console.log(`🔗 Paired ${socket.username} <--> ${partner.username}`);
+    socket.emit('paired', { 
+      partner: {
+        id: partnerData.id,
+        country: partnerData.country,
+        isUsingVPN: partnerData.isUsingVPN,
+        isVirtualCam: partnerData.isVirtualCam
+      }
+    });
+    
+    partner.emit('paired', { 
+      partner: {
+        id: userData.id,
+        country: userData.country,
+        isUsingVPN: userData.isUsingVPN,
+        isVirtualCam: userData.isVirtualCam
+      }
+    });
+
+    console.log(`🔗 Paired ${userData.id} <--> ${partnerData.id}`);
   } else {
     waitingUser = socket;
     socket.emit('waiting');
-    console.log(`⏳ ${socket.username} is waiting...`);
+    console.log(`⏳ ${userData.id} is waiting...`);
   }
 
   // Text chat
   socket.on('chat message', (msg) => {
-    if (socket.partner) {
-      socket.partner.emit('chat message', `${socket.username}: ${msg}`);
+    const user = users.get(socket.id);
+    if (user.partner) {
+      user.partner.emit('chat message', {
+        text: msg,
+        sender: user.id,
+        timestamp: Date.now()
+      });
     }
   });
 
   // Typing indicators
   socket.on('typing', () => {
-    if (socket.partner) {
-      socket.partner.emit('typing', socket.username);
+    const user = users.get(socket.id);
+    if (user.partner) {
+      user.partner.emit('typing', user.id);
     }
   });
 
   socket.on('stop-typing', () => {
-    if (socket.partner) {
-      socket.partner.emit('stop-typing');
+    const user = users.get(socket.id);
+    if (user.partner) {
+      user.partner.emit('stop-typing');
     }
   });
 
   // Find new stranger
   socket.on('find new', () => {
-    console.log(`${socket.username} is finding a new stranger.`);
+    const user = users.get(socket.id);
+    console.log(`${user.id} is finding a new stranger.`);
 
-    if (socket.partner) {
-      socket.partner.emit('stranger disconnected');
-      socket.partner.partner = null;
-      socket.partner = null;
+    if (user.partner) {
+      user.partner.emit('stranger disconnected');
+      const partnerData = users.get(user.partner.id);
+      partnerData.partner = null;
+      user.partner = null;
     }
 
     if (waitingUser === null) {
@@ -83,48 +151,66 @@ io.on('connection', (socket) => {
       socket.emit('waiting');
     } else if (waitingUser !== socket) {
       const partner = waitingUser;
+      const partnerData = users.get(partner.id);
+      
       waitingUser = null;
+      user.partner = partner;
+      partnerData.partner = socket;
+      user.connectionTime = Date.now();
+      partnerData.connectionTime = Date.now();
 
-      socket.partner = partner;
-      partner.partner = socket;
+      socket.emit('paired', { 
+        partner: {
+          id: partnerData.id,
+          country: partnerData.country,
+          isUsingVPN: partnerData.isUsingVPN,
+          isVirtualCam: partnerData.isVirtualCam
+        }
+      });
+      
+      partner.emit('paired', { 
+        partner: {
+          id: user.id,
+          country: user.country,
+          isUsingVPN: user.isUsingVPN,
+          isVirtualCam: user.isVirtualCam
+        }
+      });
 
-      socket.emit('paired', { with: partner.username });
-      partner.emit('paired', { with: socket.username });
-      console.log(`🔁 Repaired ${socket.username} <--> ${partner.username}`);
+      console.log(`🔁 Repaired ${user.id} <--> ${partnerData.id}`);
     }
   });
 
   // WebRTC signaling
-  socket.on('webrtc-offer', (offer) => {
-    if (socket.partner) {
-      socket.partner.emit('webrtc-offer', offer);
-    }
-  });
-
-  socket.on('webrtc-answer', (answer) => {
-    if (socket.partner) {
-      socket.partner.emit('webrtc-answer', answer);
-    }
-  });
-
-  socket.on('webrtc-ice-candidate', (candidate) => {
-    if (socket.partner) {
-      socket.partner.emit('webrtc-ice-candidate', candidate);
-    }
+  const webrtcEvents = ['webrtc-offer', 'webrtc-answer', 'webrtc-ice-candidate'];
+  webrtcEvents.forEach(event => {
+    socket.on(event, (data) => {
+      const user = users.get(socket.id);
+      if (user.partner) {
+        user.partner.emit(event, data);
+      }
+    });
   });
 
   // Disconnect
   socket.on('disconnect', () => {
-    console.log(`🔴 ${socket.username} disconnected`);
+    const user = users.get(socket.id);
+    if (!user) return;
+
+    console.log(`🔴 ${user.id} disconnected`);
 
     if (waitingUser === socket) {
       waitingUser = null;
     }
 
-    if (socket.partner) {
-      socket.partner.emit('stranger disconnected');
-      socket.partner.partner = null;
+    if (user.partner) {
+      user.partner.emit('stranger disconnected');
+      const partnerData = users.get(user.partner.id);
+      if (partnerData) partnerData.partner = null;
     }
+
+    users.delete(socket.id);
+    io.emit('user-count', fakeUserCount);
   });
 });
 
